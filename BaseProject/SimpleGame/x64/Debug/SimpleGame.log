@@ -1,0 +1,8 @@
+﻿  stdafx.cpp
+  Renderer.cpp
+C:\Users\임성훈\Desktop\BaseProject\SimpleGame\Renderer.cpp(63,21): warning C4267: '=': 'size_t'에서 'GLint'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+  (소스 파일 '/Renderer.cpp'을(를) 컴파일하는 중)
+  
+  SimpleGame.cpp
+  코드를 생성하고 있습니다...
+  SimpleGame.vcxproj -> C:\Users\임성훈\Desktop\BaseProject\x64\Debug\SimpleGame.exe
