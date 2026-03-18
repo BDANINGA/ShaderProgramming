@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Renderer.h"
+#include <vector>
 
 Renderer::Renderer(int windowSizeX, int windowSizeY)
 {
@@ -23,6 +24,7 @@ void Renderer::Initialize(int windowSizeX, int windowSizeY)
 	
 	//Create VBOs
 	CreateVertexBufferObjects();
+	CreateParticleVBO(100000);
 
 	if (m_SolidRectShader > 0 && m_VBORect > 0)
 	{
@@ -51,21 +53,25 @@ void Renderer::CreateVertexBufferObjects()
 	float centerx = 0;
 	float centery = 0;
 	float size = 0.1;
+	float mass = 1;
+	float vx = 1;
+	float vy = 3;
 	float triangle[]
 		=
 	{
-		centerx - size/2, centery - size / 2, 0,
-		centerx + size/2, centery - size/2, 0,
-		centerx + size/2, centery + size/2, 0, // triangle1
+		centerx - size/2, centery - size / 2, 0, mass, vx, vy,
+		centerx + size/2, centery - size/2, 0, mass, vx, vy,
+		centerx + size/2, centery + size/2, 0, mass, vx, vy,// triangle1
 		
-		centerx - size / 2, centery - size / 2, 0,
-		centerx + size / 2, centery + size / 2, 0,
-		centerx - size/2, centery + size / 2, 0 // triangle2
+		centerx - size / 2, centery - size / 2, 0, mass, vx, vy,
+		centerx + size / 2, centery + size / 2, 0, mass, vx, vy,
+		centerx - size/2, centery + size / 2, 0, mass, vx, vy // triangle2
 	};
 
 	glGenBuffers(1, &m_VBOTriangle);
 	glBindBuffer(GL_ARRAY_BUFFER, m_VBOTriangle);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(triangle), triangle, GL_STATIC_DRAW);
+
 }
 
 void Renderer::AddShader(GLuint ShaderProgram, const char* pShaderText, GLenum ShaderType)
@@ -216,13 +222,23 @@ void Renderer::DrawTriangle()
 	glUniform1f(uTime, g_time);
 
 	int attribPosition = glGetAttribLocation(m_TriangleShader, "a_Position");
+	int attribMass = glGetAttribLocation(m_TriangleShader, "a_Mass");
+	int attribVel = glGetAttribLocation(m_TriangleShader, "a_Vel");
+
 	glEnableVertexAttribArray(attribPosition);
+	glEnableVertexAttribArray(attribMass);
+	glEnableVertexAttribArray(attribVel);
+
 	glBindBuffer(GL_ARRAY_BUFFER, m_VBOTriangle);
-	glVertexAttribPointer(attribPosition, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, 0);
+	glVertexAttribPointer(attribPosition, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, 0);
+	glVertexAttribPointer(attribMass, 1, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (GLvoid*)(sizeof(float)* 3));
+	glVertexAttribPointer(attribVel, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (GLvoid*)(sizeof(float) * 4));
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 
 	glDisableVertexAttribArray(attribPosition);
+	glDisableVertexAttribArray(attribMass);
+	glDisableVertexAttribArray(attribVel);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -231,4 +247,80 @@ void Renderer::GetGLPosition(float x, float y, float *newX, float *newY)
 {
 	*newX = x * 2.f / m_WindowSizeX;
 	*newY = y * 2.f / m_WindowSizeY;
+}
+
+void Renderer::CreateParticleVBO(int numParticles)
+{
+	// 1. 데이터 컨테이너 준비
+	// 삼각형 1개당 정점 3개, 정점당 float 6개 (x, y, z, mass, vx, vy)
+	std::vector<float> vertices;
+	vertices.reserve(numParticles * 3 * 6);
+
+	for (int i = 0; i < numParticles; ++i)
+	{
+		// 입자별 공통 속성 생성 (랜덤 값 예시)
+		float startX = ((rand() % 2000) / 1000.0f) - 1.0f; // -1.0 ~ 1.0
+		float startY = ((rand() % 1000) / 1000.0f);        // 0.0 ~ 1.0 (상단)
+		float size = 0.02f + ((rand() % 100) / 5000.0f);   // 작은 크기
+		float mass = 1.0f + ((rand() % 100) / 100.0f);     // 1.0 ~ 2.0
+		float vx = ((rand() % 1000) / 500.0f) - 1.0f;      // -1.0 ~ 1.0
+		float vy = 3;     // 초기 상방 속도
+
+		// 삼각형의 3개 정점 생성 (중심점을 기준으로 size만큼 떨어진 위치)
+		// 각 정점은 동일한 질량과 속도 데이터를 공유해야 물리 연산이 일관되게 적용됨
+		float triangleOffsets[3][2] = {
+			{ 0.0f, size },           // 위
+			{ -size, -size },         // 왼쪽 아래
+			{ size, -size }           // 오른쪽 아래
+		};
+
+		for (int j = 0; j < 3; ++j) {
+			vertices.push_back(startX + triangleOffsets[j][0]); // x
+			vertices.push_back(startY + triangleOffsets[j][1]); // y
+			vertices.push_back(0.0f);                           // z
+			vertices.push_back(mass);                           // a_Mass
+			vertices.push_back(vx);                             // a_Vel.x
+			vertices.push_back(vy);                             // a_Vel.y
+		}
+	}
+
+	// 2. GPU 버퍼 생성 및 데이터 전송
+	if (m_VBOParticle == 0) {
+		glGenBuffers(1, &m_VBOParticle);
+	}
+	glBindBuffer(GL_ARRAY_BUFFER, m_VBOParticle);
+	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+
+	std::cout << numParticles << " Particles created in VBO.\n";
+}
+
+void Renderer::DrawParticles(int numParticles)
+{
+	g_time += 0.0001;
+
+	glUseProgram(m_TriangleShader);
+	glUniform1f(glGetUniformLocation(m_TriangleShader, "u_Time"), g_time);
+
+	GLint posLoc = glGetAttribLocation(m_TriangleShader, "a_Position");
+	GLint massLoc = glGetAttribLocation(m_TriangleShader, "a_Mass");
+	GLint velLoc = glGetAttribLocation(m_TriangleShader, "a_Vel");
+
+	glBindBuffer(GL_ARRAY_BUFFER, m_VBOParticle);
+	glEnableVertexAttribArray(posLoc);
+	glEnableVertexAttribArray(massLoc);
+	glEnableVertexAttribArray(velLoc);
+
+	// Stride는 6 * sizeof(float)
+	glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)0);
+	glVertexAttribPointer(massLoc, 1, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)(sizeof(float) * 3));
+	glVertexAttribPointer(velLoc, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)(sizeof(float) * 4));
+
+	// 정점 개수 = 입자 수 * 3
+	glDrawArrays(GL_TRIANGLES, 0, numParticles * 3);
+
+	glDisableVertexAttribArray(posLoc);
+	glDisableVertexAttribArray(massLoc);
+	glDisableVertexAttribArray(velLoc);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }

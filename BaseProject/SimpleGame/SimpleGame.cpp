@@ -23,7 +23,8 @@ void RenderScene(void)
 	glClearColor(0.0f, 0.3f, 0.3f, 1.0f);
 
 	// Renderer Test
-	g_Renderer->DrawTriangle();
+	//g_Renderer->DrawTriangle();
+	g_Renderer->DrawParticles(100000);
 
 	glutSwapBuffers();
 }
