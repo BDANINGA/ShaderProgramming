@@ -24,7 +24,7 @@ void Renderer::Initialize(int windowSizeX, int windowSizeY)
 	
 	//Create VBOs
 	CreateVertexBufferObjects();
-	CreateParticleVBO(100000);
+	CreateParticleVBO(1000);
 
 	if (m_SolidRectShader > 0 && m_VBORect > 0)
 	{
@@ -254,17 +254,18 @@ void Renderer::CreateParticleVBO(int numParticles)
 	// 1. 데이터 컨테이너 준비
 	// 삼각형 1개당 정점 3개, 정점당 float 6개 (x, y, z, mass, vx, vy)
 	std::vector<float> vertices;
-	vertices.reserve(numParticles * 3 * 6);
+	vertices.reserve(numParticles * 3 * 8);
 
 	for (int i = 0; i < numParticles; ++i)
 	{
 		// 입자별 공통 속성 생성 (랜덤 값 예시)
-		float startX = ((rand() % 2000) / 1000.0f) - 1.0f; // -1.0 ~ 1.0
-		float startY = ((rand() % 1000) / 1000.0f);        // 0.0 ~ 1.0 (상단)
-		float size = 0.02f + ((rand() % 100) / 5000.0f);   // 작은 크기
-		float mass = 1.0f + ((rand() % 100) / 100.0f);     // 1.0 ~ 2.0
-		float vx = ((rand() % 1000) / 500.0f) - 1.0f;      // -1.0 ~ 1.0
-		float vy = 3;     // 초기 상방 속도
+		float startX = 0.0f; 
+		float startY = 0.0f; 
+		float size = 0.15f;  
+		float mass = 1.0f;  
+		float vx = ((rand() % 2000) / 500.0f) - 2.0f;      // -1.0 ~ 1.0
+		float vy = ((rand() % 2000) / 500.0f);     // 초기 상방 속도
+		float RV = ((rand() % 2000) / 1000.0f);
 
 		// 삼각형의 3개 정점 생성 (중심점을 기준으로 size만큼 떨어진 위치)
 		// 각 정점은 동일한 질량과 속도 데이터를 공유해야 물리 연산이 일관되게 적용됨
@@ -281,6 +282,8 @@ void Renderer::CreateParticleVBO(int numParticles)
 			vertices.push_back(mass);                           // a_Mass
 			vertices.push_back(vx);                             // a_Vel.x
 			vertices.push_back(vy);                             // a_Vel.y
+			vertices.push_back(RV);
+			vertices.push_back(size);
 		}
 	}
 
@@ -304,16 +307,22 @@ void Renderer::DrawParticles(int numParticles)
 	GLint posLoc = glGetAttribLocation(m_TriangleShader, "a_Position");
 	GLint massLoc = glGetAttribLocation(m_TriangleShader, "a_Mass");
 	GLint velLoc = glGetAttribLocation(m_TriangleShader, "a_Vel");
+	GLint RvelLoc = glGetAttribLocation(m_TriangleShader, "a_RV");
+	GLint sizeLoc = glGetAttribLocation(m_TriangleShader, "a_Size");
 
 	glBindBuffer(GL_ARRAY_BUFFER, m_VBOParticle);
 	glEnableVertexAttribArray(posLoc);
 	glEnableVertexAttribArray(massLoc);
 	glEnableVertexAttribArray(velLoc);
+	glEnableVertexAttribArray(RvelLoc);
+	glEnableVertexAttribArray(sizeLoc);
 
 	// Stride는 6 * sizeof(float)
-	glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)0);
-	glVertexAttribPointer(massLoc, 1, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)(sizeof(float) * 3));
-	glVertexAttribPointer(velLoc, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)(sizeof(float) * 4));
+	glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)0);
+	glVertexAttribPointer(massLoc, 1, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 3));
+	glVertexAttribPointer(velLoc, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 4));
+	glVertexAttribPointer(RvelLoc, 1, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 6));
+	glVertexAttribPointer(sizeLoc, 1, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 7));
 
 	// 정점 개수 = 입자 수 * 3
 	glDrawArrays(GL_TRIANGLES, 0, numParticles * 3);
@@ -321,6 +330,8 @@ void Renderer::DrawParticles(int numParticles)
 	glDisableVertexAttribArray(posLoc);
 	glDisableVertexAttribArray(massLoc);
 	glDisableVertexAttribArray(velLoc);
+	glDisableVertexAttribArray(RvelLoc);
+	glDisableVertexAttribArray(sizeLoc);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
