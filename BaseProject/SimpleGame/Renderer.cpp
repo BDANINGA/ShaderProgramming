@@ -251,55 +251,46 @@ void Renderer::GetGLPosition(float x, float y, float *newX, float *newY)
 
 void Renderer::CreateParticleVBO(int numParticles)
 {
-	// 1. 데이터 컨테이너 준비
-	// 삼각형 1개당 정점 3개, 정점당 float 6개 (x, y, z, mass, vx, vy)
+	// 입자 1개당 정점 6개(삼각형 2개), 각 정점당 float 8개
 	std::vector<float> vertices;
-	vertices.reserve(numParticles * 3 * 8);
+	vertices.reserve(numParticles * 6 * 8);
 
 	for (int i = 0; i < numParticles; ++i)
 	{
-		// 입자별 공통 속성 생성 (랜덤 값 예시)
-		float startX = 0.0f; 
-		float startY = 0.0f; 
-		float size = 0.15f;  
-		float mass = 1.0f;  
-		float vx = ((rand() % 2000) / 500.0f) - 2.0f;      // -1.0 ~ 1.0
-		float vy = ((rand() % 2000) / 500.0f);     // 초기 상방 속도
+		float startX = 0.0f;
+		float startY = 0.0f;
+		float size = 0.005f; // 사각형 절반 크기
+		float mass = 1.0f;
+		float vx = ((rand() % 2000) / 1000.0f) - 1.0f; // -1.0 ~ 1.0
+		float vy = ((rand() % 2000) / 1000.0f);        // 0.0 ~ 2.0
 		float RV = ((rand() % 2000) / 1000.0f);
 
-		// 삼각형의 3개 정점 생성 (중심점을 기준으로 size만큼 떨어진 위치)
-		// 각 정점은 동일한 질량과 속도 데이터를 공유해야 물리 연산이 일관되게 적용됨
-		float triangleOffsets[3][2] = {
-			{ 0.0f, size },           // 위
-			{ -size, -size },         // 왼쪽 아래
-			{ size, -size }           // 오른쪽 아래
+		// 사각형을 구성하는 6개의 정점 (두 개의 삼각형: LT-LB-RB, LT-RB-RT)
+		float rectOffsets[6][2] = {
+			{ -size,  size }, { -size, -size }, {  size, -size }, // Triangle 1
+			{ -size,  size }, {  size, -size }, {  size,  size }  // Triangle 2
 		};
 
-		for (int j = 0; j < 3; ++j) {
-			vertices.push_back(startX + triangleOffsets[j][0]); // x
-			vertices.push_back(startY + triangleOffsets[j][1]); // y
-			vertices.push_back(0.0f);                           // z
-			vertices.push_back(mass);                           // a_Mass
-			vertices.push_back(vx);                             // a_Vel.x
-			vertices.push_back(vy);                             // a_Vel.y
-			vertices.push_back(RV);
-			vertices.push_back(size);
+		for (int j = 0; j < 6; ++j) {
+			vertices.push_back(startX + rectOffsets[j][0]); // a_Position.x
+			vertices.push_back(startY + rectOffsets[j][1]); // a_Position.y
+			vertices.push_back(0.0f);                       // a_Position.z
+			vertices.push_back(mass);                       // a_Mass
+			vertices.push_back(vx);                         // a_Vel.x
+			vertices.push_back(vy);                         // a_Vel.y
+			vertices.push_back(RV);                         // a_RV
+			vertices.push_back(size);                       // a_Size
 		}
 	}
 
-	// 2. GPU 버퍼 생성 및 데이터 전송
-	if (m_VBOParticle == 0) {
-		glGenBuffers(1, &m_VBOParticle);
-	}
+	if (m_VBOParticle == 0) glGenBuffers(1, &m_VBOParticle);
 	glBindBuffer(GL_ARRAY_BUFFER, m_VBOParticle);
 	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
-
-	std::cout << numParticles << " Particles created in VBO.\n";
 }
 
 void Renderer::DrawParticles(int numParticles)
 {
-	g_time += 0.0001;
+	g_time += 0.001;
 
 	glUseProgram(m_TriangleShader);
 	glUniform1f(glGetUniformLocation(m_TriangleShader, "u_Time"), g_time);
@@ -317,15 +308,15 @@ void Renderer::DrawParticles(int numParticles)
 	glEnableVertexAttribArray(RvelLoc);
 	glEnableVertexAttribArray(sizeLoc);
 
-	// Stride는 6 * sizeof(float)
+	// Stride와 Offset 설정 (기존과 동일하게 sizeof(float) * 8 유지)
 	glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)0);
 	glVertexAttribPointer(massLoc, 1, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 3));
 	glVertexAttribPointer(velLoc, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 4));
 	glVertexAttribPointer(RvelLoc, 1, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 6));
 	glVertexAttribPointer(sizeLoc, 1, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 7));
 
-	// 정점 개수 = 입자 수 * 3
-	glDrawArrays(GL_TRIANGLES, 0, numParticles * 3);
+	// ★ 중요: 그리는 정점 개수를 numParticles * 6으로 변경
+	glDrawArrays(GL_TRIANGLES, 0, numParticles * 6);
 
 	glDisableVertexAttribArray(posLoc);
 	glDisableVertexAttribArray(massLoc);
